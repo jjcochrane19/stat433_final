@@ -1,0 +1,75 @@
+---
+title: "433_shiny"
+output: html_document
+---
+
+```{r}
+library(shiny)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+df = read.csv("QB_Weather_Game_Data.csv")
+
+df[df == "--"] = NA
+df$Passes.Completed = as.double(df$Passes.Completed)
+df$Passes.Attempted = as.double(df$Passes.Attempted)
+df$Completion.Percentage = as.double(df$Completion.Percentage)
+df$Passing.Yards = as.double(df$Passing.Yards)
+df$Passing.Yards.Per.Attempt = as.double(df$Passing.Yards.Per.Attempt)
+df$TD.Passes = as.double(df$TD.Passes)
+df$Sacks = as.double(df$Sacks)
+df$Rushing.Attempts = as.double(df$Rushing.Attempts)
+df$Rushing.Yards = as.double(df$Rushing.Yards)
+df$Ints = as.double(df$Ints)
+df$Sacked.Yards.Lost = as.double(df$Sacked.Yards.Lost)
+df$Yards.Per.Carry = as.double(df$Yards.Per.Carry)
+
+ui = fluidPage(
+    titlePanel("QB Performance (2000-2013)"),
+    sidebarLayout(
+        sidebarPanel(
+          selectInput(inputId = "x", 
+              label = "Quarterback Measurables:", 
+              choices = c("Ht", "Wt", 
+                          "Forty", "Vertical", "BenchReps", 
+                          "BroadJump", "Cone", "Shuttle", "Round", "Pick"),
+              selected = "Ht"),
+  selectInput(inputId = "y",
+                      label = "Quarterback Performance:",
+                      choices = c("Passer.Rating","Passes.Completed","Passes.Attempted","Completion.Percentage","Passing.Yards","Passing.Yards.Per.Attempt","TD.Passes","Ints","Sacks", "Rushing.Attempts", "Sacked.Yards.Lost", "Yards.Per.Carry"),
+                      selected = "Passer.Rating"),
+  sliderInput("z", "Tempurature",
+                       min = 0, max = 100, value = c(25, 75)),
+  sliderInput("a", "Wind",
+                       min = 0, max = 30, value = c(5, 25)),
+  sliderInput("b", "Humidity",
+                       min = 0, max = 100, value = c(25, 75))
+        ),
+        mainPanel(
+            plotOutput(outputId = "scatterplot")
+        )
+    )
+)
+
+server = function(input, output) {
+  ggdata = reactive({
+  temps = input$z
+  wind = input$a
+  humidity = input$b
+  df %>% filter(avg_temp > temps[1], avg_temp < temps[2])%>%
+    filter(avg_wind > wind[1], avg_wind < wind[2])%>%
+    filter(avg_humidity > humidity[1], avg_humidity < humidity[2])
+})
+  
+    output$scatterplot = renderPlot({
+        p = ggplot(data = ggdata()) +
+            aes_string(x = input$x, y = input$y) +
+            geom_point()+
+          geom_smooth(method = "lm")
+        plot(p)
+    })
+}
+
+shinyApp(ui, server)
+```
