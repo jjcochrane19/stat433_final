@@ -1,0 +1,179 @@
+---
+title: "Data Manipulations and Graphs"
+output: html_notebook
+---
+
+```{r, echo = FALSE}
+library(dplyr)
+library(tidyverse)
+library(lubridate)
+library(shiny)
+library(stats)
+library(ggfortify)
+library(ggplot2)
+library(extrafont)
+library(showtext)
+library(scales)
+library(ggpubr)
+library(broom)
+library(AICcmodavg)
+```
+```{r, echo =FALSE}
+comb<- read.csv('combine.csv')
+qb <- read.csv('quarterback.csv')
+comb <- comb%>%
+  filter(Pos == 'QB')%>%
+  mutate(Name=Player)
+
+named_qb <- qb %>%
+  filter(Games.Played >= 1)%>%
+  separate(Name, into=c('last','first'), sep=", ")%>%
+  mutate(Name = paste(first, last, sep=' '))
+named_qb
+  
+
+nfl_codes <-read.csv('nfl_teams.txt')%>%
+  rename(Team=Name)
+```
+
+```{r, echo = FALSE}
+named_qb <- named_qb%>%
+  filter(Name %in% comb$Player)
+
+
+Game_Data <- left_join(named_qb, comb, by='Name')
+write.csv(Game_Data,'QB_Game_Data.csv')
+```
+
+```{r, echo = FALSE}
+
+data <- read.csv('QB_Game_Data.csv')
+weath <- read.csv('weather.csv')
+join_weath <- weath%>%
+  mutate(date = ymd(date))%>%
+  mutate(Team = home)
+  
+join_weath
+qb_data <- left_join(data, nfl_codes, by='Team')%>%
+  drop_na(Abbreviation)
+qb_data
+```
+
+```{r, echo = FALSE}
+comb_data <- qb_data %>%
+  mutate(Date = ymd(paste(`Year.x`,`Game.Date`,sep='/')))%>%
+  filter(Season == 'Regular Season')%>%
+  mutate(code = ifelse(`Home.or.Away` == 'Home', `Abbreviation`, ifelse(`Home.or.Away` == 'Away', Opponent, NA)))%>%
+  mutate(HomeTeamDate = paste(Date, code))
+comb_data
+```
+
+
+```{r, echo = FALSE}
+final_weath<- left_join(join_weath, nfl_codes, by='Team') 
+final_weath
+```
+
+
+```{r, echo = FALSE}
+final_weath <- final_weath%>%
+  drop_na(Abbreviation, date)%>%
+  mutate(HomeTeamDate = paste(date, Abbreviation, sep = ' '))
+
+```
+
+```{r, echo =FAlSE}
+final_data <- left_join(comb_data, final_weath, by="HomeTeamDate")%>%
+  drop_na(avg_temp)%>%
+  filter(Games.Started > 0)
+df = final_data
+df = left_join(df, read.csv("hand_size.csv"), by = "Name")
+write.csv(df,'QB_Weather_Game_Data.csv')
+
+```
+
+```{r}
+set.seed(1)
+data = read.csv("QB_Weather_Game_Data.csv")
+data = data %>% select(Passes.Attempted, Completion.Percentage, Passing.Yards.Per.Attempt, Ints, Sacks, Passer.Rating, Yards.Per.Carry, Rushing.TDs, Fumbles, 
+                       Ht, Wt, Forty, Vertical, Cone, Shuttle, Round, 
+                       fog_or_haze, avg_temp, avg_dewpoint, avg_humidity, avg_wind, max_windgust, windchill, windchill_gust, sky, precipitation)
+
+# Clustering Wind
+wind = data %>% select(avg_wind) %>% drop_na()
+data_wind = data %>% drop_na(avg_wind)
+km = kmeans(wind, 2)
+km
+wind_clust = unlist(km["cluster"])
+data_wind$wind_cluster = wind_clust
+data_wind
+
+data_ = data_wind %>% filter(Passes.Attempted > 10) %>% select(wind_cluster, precipitation, sky, Passer.Rating, Forty, avg_wind) %>% drop_na(avg_wind)
+data_
+
+data_ %>% ggplot(aes(x=Forty, y=Passer.Rating)) + geom_point(size=.2) + geom_smooth(method="lm", se=T) + facet_wrap(~wind_cluster) + xlab("Forty Time (sec)") + ylab("Quarterback Passer Rating") + ggtitle("QB Passer Rating vs. Forty @ Low Wind (1) & High Wind (2)")
+
+two.way = aov(Passer.Rating ~ Forty + wind_cluster + (Forty*wind_cluster), data = data_)
+summary(two.way)
+```
+```{r}
+set.seed(1)
+data = read.csv("QB_Weather_Game_Data.csv")
+data = data %>% select(Passes.Attempted, Completion.Percentage, Passing.Yards.Per.Attempt, Ints, Sacks, Passer.Rating, Yards.Per.Carry, Rushing.TDs, Fumbles, 
+                       Ht, Wt, Forty, Vertical, Cone, Shuttle, Round, 
+                       fog_or_haze, avg_temp, avg_dewpoint, avg_humidity, avg_wind, max_windgust, windchill, windchill_gust, sky, precipitation)
+
+# Clustering Temperature
+temp = data %>% select(avg_temp) %>% drop_na()
+data_temp = data %>% drop_na(avg_temp)
+km = kmeans(temp, 2)
+km
+temp_clust = unlist(km["cluster"])
+data_temp$temp_cluster = temp_clust
+data_temp
+
+data_ = data_temp %>% filter(Passes.Attempted > 10) %>% select(temp_cluster, precipitation, sky, Ints, Wt, avg_temp) %>% drop_na(avg_temp)
+data_
+data_$Ints = as.numeric(data_$Ints)
+
+data_ %>% ggplot(aes(x=Wt, y=Ints)) + geom_point(size=.2) + geom_smooth(method="lm", se=F) + facet_wrap(~temp_cluster) + xlab("Weight (lbs)") + ylab("Interceptions") + ggtitle("Interceptions vs. Weight @ Low Temp (1) & High Temp (2)")
+
+two.way = aov(Ints ~ Wt + temp_cluster + (Wt*temp_cluster), data = data_)
+summary(two.way)
+```
+
+```{r}
+set.seed(1)
+data = read.csv("QB_Weather_Game_Data.csv")
+data = data %>% select(Passes.Attempted, Completion.Percentage, Passing.Yards.Per.Attempt, Ints, Sacks, Passer.Rating, Rushing.Attempts, Yards.Per.Carry, Rushing.TDs, Fumbles, 
+                       Ht, Wt, Forty, Vertical, Cone, Shuttle, Round, 
+                       fog_or_haze, avg_temp, avg_dewpoint, avg_humidity, avg_wind, max_windgust, windchill, windchill_gust, sky, precipitation)
+
+data_ = data %>% filter(Passes.Attempted > 10, Rushing.Attempts > 1) %>% select(precipitation, sky, Yards.Per.Carry, Ht, avg_wind) %>% drop_na(avg_wind, Yards.Per.Carry)
+data_
+data_$Yards.Per.Carry = as.numeric(data_$Yards.Per.Carry)
+
+data_ %>% ggplot(aes(x=Ht, y=Yards.Per.Carry, color=precipitation)) + geom_point(size=.2) + geom_smooth(method="lm", se=F) + xlab("Height (in)") + ylab("Quarterback Yards Per Carry") + ggtitle("Yards Per Carry vs. Height @Precipitation Levels")
+
+two.way = aov(Yards.Per.Carry ~ Ht + precipitation + (Ht*precipitation), data = data_)
+summary(two.way)
+```
+
+```{r}
+df3 = df
+df3 <- df3 %>%
+  filter(avg_temp < 32 & avg_wind>10, precipitation!='None')
+summary(lm(Passer.Rating ~ 1 + Hand_Size, df3))
+```
+```{r}
+df4 = df
+df4 <- df4 %>%
+  filter(avg_temp < 32 & avg_wind>10, precipitation!='None')
+df4
+ggplot(df4,aes(x=Hand_Size, y = Passer.Rating))+
+        geom_point()+
+        geom_smooth(method=lm, se=FALSE)+
+        labs(title = "Quarterback Passer Rating vs. Hand Size in Inclement Weather",
+             x = "Hand Size (Inches)",
+             y = "Quarterback Passer Rating")
+```

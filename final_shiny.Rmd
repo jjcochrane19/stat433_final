@@ -1,0 +1,88 @@
+---
+title: "433_shiny"
+output: html_document
+---
+
+```{r}
+library(shiny)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(extrafont)
+library(showtext)
+
+
+df = read.csv("QB_Weather_Game_Data.csv")
+df = left_join(df, read.csv("hand_size.csv"), by = "Name")
+
+df[df == "--"] = NA
+df$Passes.Completed = as.double(df$Passes.Completed)
+df$Passes.Attempted = as.double(df$Passes.Attempted)
+df$Completion.Percentage = as.double(df$Completion.Percentage)
+df$Passing.Yards = as.double(df$Passing.Yards)
+df$Passing.Yards.Per.Attempt = as.double(df$Passing.Yards.Per.Attempt)
+df$TD.Passes = as.double(df$TD.Passes)
+df$Sacks = as.double(df$Sacks)
+df$Rushing.Attempts = as.double(df$Rushing.Attempts)
+df$Rushing.Yards = as.double(df$Rushing.Yards)
+df$Ints = as.double(df$Ints)
+df$Sacked.Yards.Lost = as.double(df$Sacked.Yards.Lost)
+df$Yards.Per.Carry = as.double(df$Yards.Per.Carry)
+df = df %>%
+  rename("Height" = "Ht", "Weight" = "Wt", "Forty_Time" = "Forty", "Bench_Reps" = "BenchReps", "Broad_Jump" = "BroadJump", "Three_Cone_Drill_Time" = "Cone", "Shuttle_Drill_Time" = "Shuttle", "Passer_Rating" = "Passer.Rating", "Passes_Completed" = "Passes.Completed", "Passes_Attempted" = "Passes.Attempted", "Completion_Percentage" = "Completion.Percentage", "Passing_Yards" = "Passing.Yards", "Passing_Yards_Per_Attempt" = "Passing.Yards.Per.Attempt", "Touchdown_Passes" = "TD.Passes", "Interceptions" = "Ints", "Rushing_Attempts" = "Rushing.Attempts", "Sacked_Yards_Lost" = "Sacked.Yards.Lost", "Yards_Per_Carry" = "Yards.Per.Carry")
+  df
+ui = fluidPage(
+    titlePanel("QB Performance (2000-2013)"),
+    sidebarLayout(
+        sidebarPanel(
+          selectInput(inputId = "x", 
+              label = "Quarterback Measurables:", 
+              choices = c("Height", "Weight", 
+                          "Forty_Time", "Vertical", "Bench_Reps", 
+                          "Broad_Jump", "Three_Cone_Drill_Time", "Shuttle_Drill_Time", "Round", "Pick", "Hand_Size.x"),
+              selected = "Height"),
+  selectInput(inputId = "y",
+                      label = "Quarterback Performance:",
+                      choices = c("Passer_Rating","Passes_Completed","Passes_Attempted","Completion_Percentage","Passing_Yards","Passing_Yards_Per_Attempt","TD_Passes","Interceptions","Sacks", "Rushing_Attempts", "Sacked_Yards_Lost", "Yards_Per_Carry"),
+                      selected = "Passer_Rating"),
+  sliderInput("z", "Tempurature",
+                       min = 0, max = 100, value = c(25, 75)),
+  sliderInput("a", "Wind",
+                       min = 0, max = 30, value = c(5, 25)),
+  sliderInput("b", "Humidity",
+                       min = 0, max = 100, value = c(25, 75))
+        ),
+        mainPanel(
+            plotOutput(outputId = "scatterplot")
+        )
+    )
+)
+server = function(input, output) {
+  ggdata = reactive({
+  temps = input$z
+  wind = input$a
+  humidity = input$b
+  df %>% filter(avg_temp > temps[1], avg_temp < temps[2])%>%
+    filter(avg_wind > wind[1], avg_wind < wind[2])%>%
+    filter(avg_humidity > humidity[1], avg_humidity < humidity[2])
+})
+  
+    output$scatterplot = renderPlot({
+        p = ggplot(data = ggdata()) +
+            aes_string(x = input$x, y = input$y) +
+            geom_point()+
+          geom_smooth(method = "lm")#+
+    #      theme(axis.title = element_text(family = "Freshman", size = 20),
+    #title = element_text(family = "Freshman"),
+    #plot.title = element_text(family = "Freshman", size = 30),
+    #axis.title.x = element_text(margin=margin(t=10)),
+    #  axis.title.y = element_text(margin=margin(r=10)),
+    #axis.text.x = element_text(size = 15, family = "Freshman"),
+    #      axis.text.y = element_text(size = 15, family = "Freshman"))
+        plot(p)
+    })
+}
+shinyApp(ui, server)
+
+df
+```
